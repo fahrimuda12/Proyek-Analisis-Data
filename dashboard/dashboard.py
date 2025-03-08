@@ -42,6 +42,7 @@ main_df = all_df[(all_df["order_approved_at"] >= str(start_date)) &
 helper = Analyzer(main_df)
 
 # Product Helper
+dynamic_trends_product = helper.create_dynamic_trends_products_df()
 quartely_trend_products_df = helper.create_trend_product_quarterly_df()
 jumlah_order_produk_df = helper.create_jumlah_order_produk_df()
 
@@ -51,20 +52,37 @@ order_status, common_status = helper.create_order_status()
 
 # Customer Helper
 sum_spend_df = helper.create_customer_sum_spend_money_df()
-review_score, common_score = helper.create_customer_review_score_df()
+data_review_df = helper.create_customer_review_score_df()
 state, most_common_state = helper.create_bystate_df()
 
 # Revenue Helper
 revenue_top_product_df = helper.create_revenue_top_product_df()
-revenue_top_yearly_df = helper.create_revenue_top_yearly_df()
+revenue_top_quarter_df = helper.create_revenue_top_quarter_df()
 
 # Title
 st.header("Shopingku Dashboard :convenience_store:")
 
 # menu bar
-product_menu, order_menu, customer_menu, reveneu_menu = st.tabs(["Product", "Order", "Customer", "Revenue"])
+main_menu, order_menu, customer_menu, reveneu_menu = st.tabs(["Main", "Order", "Customer", "Revenue"])
 
-with product_menu:
+with main_menu:
+   # Dynamic Product Trends
+   st.subheader("Dynamic Product Trends")
+
+   plt.figure(figsize=(14, 8))
+   for category in dynamic_trends_product['product_category_name_english'].unique():
+      category_data = dynamic_trends_product[dynamic_trends_product['product_category_name_english'] == category]
+      plt.plot(category_data['month_year'].astype(str), category_data['total_transactions'], label=category)
+
+   plt.title('Trend of Product Dynamics by Category')
+   plt.xlabel('Period')
+   plt.ylabel('Total Transactions')
+   plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+   plt.xticks(rotation=90)
+   plt.grid(True)
+   plt.tight_layout()
+   st.pyplot(plt)
+
    # Quarterly Trends
    st.subheader("Top 3 Quarterly Trends")
 
@@ -73,7 +91,7 @@ with product_menu:
 
    quarter_labels = [f"{str(label).replace('Q', '-Q')} \n ({label.start_time.strftime('%b')}-{label.end_time.strftime('%b')})" for label in quartely_trend_products_df['quarter_year'].unique()]
    plt.gca().set_xticklabels(quarter_labels)
-   plt.xlabel('Quarter-Year')
+   plt.xlabel('Quarter Period')
    plt.ylabel('Total Transactions')
    plt.xticks(rotation=90)
    plt.legend(title='Product Category', bbox_to_anchor=(1.05, 1), loc='upper left')
@@ -100,21 +118,63 @@ with product_menu:
 
    sns.barplot(x="products", y="product_category_name_english", data=jumlah_order_produk_df.head(5), palette=colors, ax=ax[0])
    ax[0].set_ylabel(None)
-   ax[0].set_xlabel("Number of Sales", fontsize=30)
-   ax[0].set_title("Produk Terlaris", loc="center", fontsize=50)
+   ax[0].set_xlabel(None)
+   ax[0].set_title("Best Selling Products", loc="center", fontsize=50)
    ax[0].tick_params(axis ='y', labelsize=35)
    ax[0].tick_params(axis ='x', labelsize=30)
 
    sns.barplot(x="products", y="product_category_name_english", data=jumlah_order_produk_df.sort_values(by="products", ascending=True).head(5), palette=colors, ax=ax[1])
    ax[1].set_ylabel(None)
-   ax[1].set_xlabel("Number of Sales", fontsize=30)
+   ax[1].set_xlabel(None)
    ax[1].invert_xaxis()
    ax[1].yaxis.set_label_position("right")
    ax[1].yaxis.tick_right()
-   ax[1].set_title("Produk Sedikit Terjual", loc="center", fontsize=50)
+   ax[1].set_title("Unpopular Products", loc="center", fontsize=50)
    ax[1].tick_params(axis='y', labelsize=35)
    ax[1].tick_params(axis='x', labelsize=30)
    st.pyplot(fig)
+
+   # revenue Top Quarterly
+   st.subheader("Revenue Top Quarterly")
+
+   # Create a line plot for the top 3 products by yearly revenue
+   fig, ax = plt.subplots(figsize=(12, 6))
+   sns.lineplot(x='quarter_year', y='price', hue='product_category_name_english', data=revenue_top_quarter_df, marker='o', palette='viridis')
+   plt.gca().xaxis.set_major_locator(ticker.MaxNLocator(integer=True))
+
+   # Add titles and labels
+   plt.title('Quarter Revenue of Top 5 Product Categories', fontsize=16)
+   plt.xlabel('Quarter', fontsize=14)
+   plt.ylabel('Total Revenue', fontsize=14)
+   plt.legend(title='Product Category', bbox_to_anchor=(1.05, 1), loc='upper left')
+
+   # Format y-axis as dollar
+   formatter = ticker.FuncFormatter(lambda x, pos: f'${x:,.0f}')
+   plt.gca().yaxis.set_major_formatter(formatter)
+   st.pyplot(fig)
+
+   # Review Score
+   st.subheader("Review Score")
+   col1,col2 = st.columns(2)
+
+   with col1:
+      avg_review_score = data_review_df.review_score.mean()
+      st.markdown(f"Average Review Score: **{avg_review_score:.2f}**")
+
+
+   with col2:
+      most_common_review_score = data_review_df.review_score.value_counts().index[0]
+      st.markdown(f"Most Common Review Score: **{most_common_review_score}**")
+
+   fig, ax = plt.subplots(figsize=(12, 6))
+   sns.countplot(data=data_review_df, x='review_score', palette=["#068DA9"])
+
+   plt.title("Distribution of Review Scores", fontsize=15)
+   plt.xlabel("Rating")
+   plt.ylabel("Count")
+   plt.xticks(fontsize=12)
+   st.pyplot(fig)
+
 
 with order_menu:
    # Daily Orders
@@ -127,7 +187,7 @@ with order_menu:
       st.markdown(f"Total Order: **{total_order}**")
 
    with col2:
-      total_revenue = format_currency(daily_orders_df["revenue"].sum(), "IDR", locale="id_ID")
+      total_revenue = format_currency(daily_orders_df["revenue"].sum(), "USD", locale="en_US")
       st.markdown(f"Total Revenue: **{total_revenue}**")
 
    fig, ax = plt.subplots(figsize=(12, 6))
@@ -166,11 +226,11 @@ with customer_menu:
    col1, col2 = st.columns(2)
 
    with col1:
-      total_spend = format_currency(sum_spend_df["total_spend"].sum(), "IDR", locale="id_ID")
+      total_spend = format_currency(sum_spend_df["total_spend"].sum(), "USD", locale="en_US")
       st.markdown(f"Total Spend: **{total_spend}**")
 
    with col2:
-      avg_spend = format_currency(sum_spend_df["total_spend"].mean(), "IDR", locale="id_ID")
+      avg_spend = format_currency(sum_spend_df["total_spend"].mean(), "USD", locale="en_US")
       st.markdown(f"Average Spend: **{avg_spend}**")
 
    fig, ax = plt.subplots(figsize=(12, 6))
@@ -207,21 +267,17 @@ with customer_menu:
    col1,col2 = st.columns(2)
 
    with col1:
-      avg_review_score = review_score.mean()
-      st.markdown(f"Average Review Score: **{avg_review_score}**")
+      avg_review_score = data_review_df.review_score.mean()
+      st.markdown(f"Average Review Score: **{avg_review_score:.2f}**")
 
    with col2:
-      most_common_review_score = review_score.value_counts().index[0]
+      most_common_review_score = data_review_df.review_score.value_counts().index[0]
       st.markdown(f"Most Common Review Score: **{most_common_review_score}**")
 
    fig, ax = plt.subplots(figsize=(12, 6))
-   sns.barplot(x=review_score.index, 
-               y=review_score.values, 
-               order=review_score.index,
-               palette=["#068DA9" if score == common_score else "#D3D3D3" for score in review_score.index]
-               )
+   sns.countplot(data=data_review_df, x='review_score', palette=["#068DA9"])
 
-   plt.title("Rating by customers for service", fontsize=15)
+   plt.title("Distribution of Review Scores", fontsize=15)
    plt.xlabel("Rating")
    plt.ylabel("Count")
    plt.xticks(fontsize=12)
@@ -231,26 +287,26 @@ with reveneu_menu:
    # Revenue Top Product
    st.subheader("Revenue Top Product")
    
-   revenue_top_product_df["payment_value"] = revenue_top_product_df["payment_value"].apply(lambda x: format_currency(x, "IDR", locale="id_ID"))
+   revenue_top_product_df["price"] = revenue_top_product_df["price"].apply(lambda x: format_currency(x, "USD", locale="en_US"))
    
    fig, ax = plt.subplots(figsize=(12, 6))
-   sns.barplot(x="payment_value", y="product_category_name_english", data=revenue_top_product_df.head(5))
+   sns.barplot(x="price", y="product_category_name_english", data=revenue_top_product_df.head(5))
    plt.title("Top 5 Revenue Product", fontsize=15)
    plt.xlabel("Revenue")
    plt.ylabel("Product Category")
    st.pyplot(fig)
 
    # revenue Top Yearly
-   st.subheader("Revenue Top Yearly")
+   st.subheader("Revenue Top Quarterly")
 
    # Create a line plot for the top 3 products by yearly revenue
    fig, ax = plt.subplots(figsize=(12, 6))
-   sns.lineplot(x='year', y='payment_value', hue='product_category_name_english', data=revenue_top_yearly_df, marker='o', palette='viridis')
+   sns.lineplot(x='quarter_year', y='price', hue='product_category_name_english', data=revenue_top_quarter_df, marker='o', palette='viridis')
    plt.gca().xaxis.set_major_locator(ticker.MaxNLocator(integer=True))
 
    # Add titles and labels
-   plt.title('Yearly Revenue of Top 3 Product Categories', fontsize=16)
-   plt.xlabel('Year', fontsize=14)
+   plt.title('Quarter Revenue of Top 5 Product Categories', fontsize=16)
+   plt.xlabel('Quarter', fontsize=14)
    plt.ylabel('Total Revenue', fontsize=14)
    plt.legend(title='Product Category', bbox_to_anchor=(1.05, 1), loc='upper left')
 
